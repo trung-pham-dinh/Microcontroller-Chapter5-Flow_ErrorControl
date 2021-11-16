@@ -70,7 +70,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 
 uint32_t adcVal = 0;
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	//adcVal = HAL_ADC_GetValue(&hadc1);
+	MP_adcCalc();
 	MP_decreaseTimer();
 }
 /* USER CODE END 0 */
@@ -110,7 +110,7 @@ int main(void)
   HAL_ADC_Start(&hadc1);
   HAL_TIM_Base_Start_IT(&htim2);
 
-  MP_init(&huart2);
+  MP_init(&huart2, &hadc1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -316,46 +316,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-//typedef enum {
-//	Waiting,
-//	Reading,
-//	Finishing
-//} MessState;
-//void messageProcess() {
-//	static MessState state = Waiting;
-//
-//	if(byteReady == 0) return;
-//	byteReady = 0;
-//
-//	switch(state) {
-//	case Waiting:
-//		if(temp == '!') {
-//			state = Reading;
-//			index_buffer = 0;
-//		}
-//		break;
-//	case Reading:
-//		if(index_buffer < 3) {
-//			cmdData[index_buffer++] = temp;
-//			if(index_buffer == 3) {
-//				state = Finishing;
-//			}
-//		}
-//		break;
-//	case Finishing:
-//		if(temp == '#') {
-//			cmdFlag = 1;
-//			index_buffer = 0;
-//			HAL_UART_Transmit(&huart2, cmdData, 3, HAL_MAX_DELAY);
-//		}
-//		else {
-//			clearBuffer();
-//			HAL_UART_Transmit(&huart2, (uint8_t*)"Error\r\n", 7, HAL_MAX_DELAY);
-//		}
-//		state = Waiting;
-//		break;
-//	}
-//}
 /* USER CODE END 4 */
 
 /**
