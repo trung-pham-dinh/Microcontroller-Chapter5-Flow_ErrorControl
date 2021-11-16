@@ -1,0 +1,6 @@
+STM/.metadata
+STM/chapter5/*
+!STM/chapter5/Core
+!STM/chapter5/.cproject
+!STM/chapter5/.project
+!STM/chapter5/*.ioc
