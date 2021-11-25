@@ -14,15 +14,12 @@
 #define INTERRUPT_PERIOD    10
 #define BAUDRATE			9600
 
-void MP_init(UART_HandleTypeDef* uart, ADC_HandleTypeDef* adc);
+void MP_init(UART_HandleTypeDef* uart, ADC_HandleTypeDef* adc, TIM_HandleTypeDef* tim);
+void MP_command_parser();
+void MP_communication();
 void MP_readByte();
-void MP_processByte();
-void MP_processCMD();
-void MP_clearCMD();
 void MP_setTimer(uint32_t ms);
-void MP_resetTimer();
-void MP_decreaseTimer();
-uint8_t MP_getTimerFlag();
+void MP_timer_run();
 void MP_adcCalc();
 
 #endif /* INC_MESSAGEPROCESS_H_ */

@@ -64,14 +64,14 @@ static void MX_USART2_UART_Init(void);
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	if(huart->Instance == USART2){
-		MP_readByte();
+		MP_readByte(); // store to buffer for later processing
 	}
 }
 
 uint32_t adcVal = 0;
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	MP_adcCalc();
-	MP_decreaseTimer();
+	MP_timer_run();
 }
 /* USER CODE END 0 */
 
@@ -110,15 +110,15 @@ int main(void)
   HAL_ADC_Start(&hadc1);
   HAL_TIM_Base_Start_IT(&htim2);
 
-  MP_init(&huart2, &hadc1);
+  MP_init(&huart2, &hadc1, &htim2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  MP_processByte();
-	  MP_processCMD();
+	  MP_command_parser();
+	  MP_communication();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
