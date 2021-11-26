@@ -216,7 +216,6 @@ void TM_controlSecTimer(uint8_t timer, ControlTimer control) {
 }
 
 void TM_timerRun() {
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
 	for(int i = 0; i < NO_OF_MIL_TIMERS; i++) {
 		if(timer_mil_stop[i] == TM_STOP_TIMER) continue;
 		if(timer_mil_counter[i] > 0) {

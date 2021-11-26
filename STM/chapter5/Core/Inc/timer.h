@@ -11,7 +11,7 @@
 #include "main.h"
 
 #define TIMER_CLOCK_FREQ 8000
-#define	NO_OF_SEC_TIMERS 1
+#define	NO_OF_SEC_TIMERS 2
 #define NO_OF_MIL_TIMERS 0
 
 typedef enum {

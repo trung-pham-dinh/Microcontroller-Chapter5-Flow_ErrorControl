@@ -12,6 +12,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define OK_TIMEOUT 3
+#define MESS_TIMEOUT 1
+
 static UART_HandleTypeDef* MP_uart;
 static ADC_HandleTypeDef* MP_adc;
 static uint8_t tempChar = 0;
@@ -29,13 +32,14 @@ typedef enum {
 typedef enum {
 	MP_IDLE,
 	MP_ADC,
-	MP_RESENT
+	MP_SENT
 } CommuState;
 
 typedef enum {
 	MP_RST_CMD,
 	MP_OK_CMD,
-	MP_ERROR_CMD
+	MP_ERROR_CMD,
+	MP_NO_CMD
 } CMD;
 
 static char* MP_cmd[] = {"RST", "OK"};
@@ -43,9 +47,7 @@ static char* MP_cmd[] = {"RST", "OK"};
 static uint8_t cmdData[CMD_SIZE];
 static uint8_t cmdFlag = 0;
 
-static const uint32_t Max_delay =  1; // in practice: CMD_SIZE*8 / BAUDRATE;
-//static uint32_t timer_counter = 0;
-//static uint8_t timer_flag = 0;
+//static const uint32_t Max_delay =  1; // in practice: CMD_SIZE*8 / BAUDRATE;
 
 static uint32_t adcVal = 0;
 
@@ -89,9 +91,8 @@ void MP_command_parser() {
 
 		if(byte == '!') {
 			index = 0;
-			MP_clearCMD(); // clear command buffer
-//			MP_setTimer(Max_delay); // set timeout on waiting command
-			TM_setSecTimer(0, Max_delay);
+			memset(cmdData,0,CMD_SIZE); // clear command buffer
+			TM_setSecTimer(0, MESS_TIMEOUT);
 			state = MP_GetCMD;
 		}
 		break;
@@ -111,9 +112,6 @@ void MP_command_parser() {
 		}
 		else if(index < CMD_SIZE){
 			cmdData[index++] = byte;
-			if(index == CMD_SIZE) {
-				//state = MP_MaxSize;
-			}
 		}
 		else {
 			state = MP_NoEnd;
@@ -125,9 +123,8 @@ void MP_command_parser() {
 		HAL_UART_Transmit(MP_uart, (uint8_t*)"NewStart\r\n", 10, HAL_MAX_DELAY);
 
 		index = 0;
-		MP_clearCMD();
-//		MP_setTimer(Max_delay);
-		TM_setSecTimer(0, Max_delay);
+		memset(cmdData,0,CMD_SIZE);
+		TM_setSecTimer(0, MESS_TIMEOUT);
 		state = MP_GetCMD;
 		break;
 
@@ -160,38 +157,63 @@ void MP_command_parser() {
 }
 
 void MP_communication() {
-	if(!cmdFlag) return;
-	cmdFlag = 0;
+	static CommuState state = MP_IDLE;
+	static uint8_t send = 1;
+	static char adcString[20] = {0};
+	static char temp[10] = {0};
+	static CMD cmd = MP_NO_CMD;
 
-	HAL_UART_Transmit(MP_uart, cmdData, CMD_SIZE, HAL_MAX_DELAY);
-	HAL_UART_Transmit(MP_uart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
-//
-//	char adcString[10] = {0};
-//	itoa(adcVal, adcString, 10);
-//	HAL_UART_Transmit(MP_uart, (uint8_t*)adcString, 10, HAL_MAX_DELAY);
-//	HAL_UART_Transmit(MP_uart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
-//	if(MP_CMD_translate() == MP_RST_CMD) {
-//		char adcString[10] = {0};
-//		itoa(adcVal, adcString, 10);
-//		HAL_UART_Transmit(MP_uart, (uint8_t*)adcString, 10, HAL_MAX_DELAY);
-//		HAL_UART_Transmit(MP_uart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
-//	}
-//	CommuState state = MP_IDLE;
-//	switch(state) {
-//	case MP_IDLE:
-//		break;
-//	case MP_ADC:
-//		break;
-//	case MP_RESENT:
-//	}
-	char freqString[10] = {0};
-	itoa(HAL_RCC_GetPCLK1Freq(), freqString, 10);
-	HAL_UART_Transmit(MP_uart, (uint8_t*)freqString, 10, HAL_MAX_DELAY);
-	HAL_UART_Transmit(MP_uart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
+	switch(state) {
+	case MP_IDLE:
+		if(MP_CMD_translate() == MP_RST_CMD) {
+			state = MP_ADC;
+		}
+		break;
+	case MP_ADC:
+		itoa(adcVal, temp, 10);
+		memset(adcString,0,20);
+		strcat(adcString, "!ADC=");
+		strcat(adcString, temp);
+		strcat(adcString, "#");
+		send = 1;
+		state = MP_SENT;
+
+		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+	case MP_SENT:
+		if(send) {
+			send = 0;
+			HAL_UART_Transmit(MP_uart, (uint8_t*)adcString, 20, HAL_MAX_DELAY);
+			HAL_UART_Transmit(MP_uart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
+
+			TM_setSecTimer(1, OK_TIMEOUT);
+		}
+		if(TM_getSecFlag(1)) {
+			send = 1;
+		}
+
+		cmd = MP_CMD_translate();
+		if(cmd == MP_OK_CMD) {
+			TM_resetSecFlag(1);
+			state = MP_IDLE;
+		}
+		else if(cmd == MP_RST_CMD) {
+			TM_resetSecFlag(1);
+			state = MP_ADC;
+		}
+		break;
+	default:
+		break;
+	}
 }
 
 
 CMD MP_CMD_translate() {
+	if(!cmdFlag) return MP_NO_CMD;
+	cmdFlag = 0;
+
+	HAL_UART_Transmit(MP_uart, cmdData, CMD_SIZE, HAL_MAX_DELAY);
+	HAL_UART_Transmit(MP_uart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
+
 	if(strcmp(MP_cmd[MP_RST_CMD], (char*)cmdData) == 0) {
 		return MP_RST_CMD;
 	}
@@ -208,7 +230,6 @@ void MP_clearCMD() {
 		cmdData[i] = 0;
 	}
 }
-
 
 void MP_timer_run() {
 	TM_timerRun();
