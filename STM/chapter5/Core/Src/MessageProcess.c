@@ -46,13 +46,10 @@ static char* MP_cmd[] = {"RST", "OK"};
 
 static uint8_t cmdData[CMD_SIZE];
 static uint8_t cmdFlag = 0;
-
-//static const uint32_t Max_delay =  1; // in practice: CMD_SIZE*8 / BAUDRATE;
-
 static uint32_t adcVal = 0;
 
 static CMD MP_CMD_translate();
-static void MP_clearCMD();
+static void MP_send(char *str);
 
 void MP_init(UART_HandleTypeDef* uart, ADC_HandleTypeDef* adc, TIM_HandleTypeDef* tim) {
 	MP_uart = uart;
@@ -61,18 +58,15 @@ void MP_init(UART_HandleTypeDef* uart, ADC_HandleTypeDef* adc, TIM_HandleTypeDef
 	HAL_Delay(10);
 
 
-	HAL_UART_Transmit(MP_uart, (uint8_t*)"Message Process is ready\r\n", 26, HAL_MAX_DELAY);
+//	HAL_UART_Transmit(MP_uart, (uint8_t*)"Message Process is ready\r\n", 26, HAL_MAX_DELAY);
+	MP_send("Message Process is ready");
 	HAL_UART_Receive_IT(MP_uart, &tempChar, 1);
 }
 
-void MP_readByte() {
+void MP_readByte() { // call this in Uart receive callback
 	if(FF_isFull()) return;
 
 	FF_write(tempChar);
-
-//	uint8_t front = FF_read();
-//	HAL_UART_Transmit(MP_uart, &front, 1, HAL_MAX_DELAY);
-
 	HAL_UART_Receive_IT(MP_uart, &tempChar, 1);
 }
 
@@ -84,7 +78,7 @@ void MP_command_parser() {
 	static uint8_t byte = 0;
 
 	switch(state) {
-	// wait for start character state
+	// Wait for start character state
 	case MP_WaitCMD:
 		if(FF_isEmpty()) break;
 		byte = FF_read();
@@ -120,7 +114,7 @@ void MP_command_parser() {
 
 	// Error state
 	case MP_NewStart:
-		HAL_UART_Transmit(MP_uart, (uint8_t*)"NewStart\r\n", 10, HAL_MAX_DELAY);
+		MP_send("Error: start without terminate");
 
 		index = 0;
 		memset(cmdData,0,CMD_SIZE);
@@ -129,20 +123,20 @@ void MP_command_parser() {
 		break;
 
 	case MP_NoEnd:
-		HAL_UART_Transmit(MP_uart, (uint8_t*)"Max CMD size\r\n", 14, HAL_MAX_DELAY);
+		MP_send("Error: command too long");
+
 		TM_resetSecFlag(0);
 		state = MP_WaitCMD;
 		break;
 
 	case MP_Timeout:
 		state = MP_WaitCMD;
-		HAL_UART_Transmit(MP_uart, (uint8_t*)"timeout\r\n", 9, HAL_MAX_DELAY);
+		MP_send("Error: timeout in receiving message");
 		break;
 
 
 	// Successful state
 	case MP_Done:
-		HAL_UART_Transmit(MP_uart, (uint8_t*)"Begin to process\r\n", 18, HAL_MAX_DELAY);
 		cmdFlag = 1;
 		TM_resetSecFlag(0);
 		state = MP_WaitCMD;
@@ -182,8 +176,7 @@ void MP_communication() {
 	case MP_SENT:
 		if(send) {
 			send = 0;
-			HAL_UART_Transmit(MP_uart, (uint8_t*)adcString, 20, HAL_MAX_DELAY);
-			HAL_UART_Transmit(MP_uart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
+			MP_send(adcString);
 
 			TM_setSecTimer(1, OK_TIMEOUT);
 		}
@@ -223,12 +216,9 @@ CMD MP_CMD_translate() {
 	return MP_ERROR_CMD;
 }
 
-
-
-void MP_clearCMD() {
-	for(int i = 0; i < CMD_SIZE; i++) {
-		cmdData[i] = 0;
-	}
+void MP_send(char *str) {
+	HAL_UART_Transmit(MP_uart, (uint8_t*)str, strlen(str), HAL_MAX_DELAY);
+	HAL_UART_Transmit(MP_uart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
 }
 
 void MP_timer_run() {
