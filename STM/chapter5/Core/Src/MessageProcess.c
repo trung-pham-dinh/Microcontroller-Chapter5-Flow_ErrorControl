@@ -44,7 +44,7 @@ typedef enum {
 
 static char* MP_cmd[] = {"RST", "OK"};
 
-static uint8_t cmdData[CMD_SIZE];
+static uint8_t cmdData[CMD_SIZE+1]; // slot for '\0', standardize cmd buffer to C-string
 static uint8_t cmdFlag = 0;
 static uint32_t adcVal = 0;
 
@@ -85,7 +85,7 @@ void MP_command_parser() {
 
 		if(byte == '!') {
 			index = 0;
-			memset(cmdData,0,CMD_SIZE); // clear command buffer
+			memset(cmdData,0,CMD_SIZE+1); // clear command buffer
 			TM_setSecTimer(0, MESS_TIMEOUT);
 			state = MP_GetCMD;
 		}
@@ -117,7 +117,7 @@ void MP_command_parser() {
 		MP_send("Error: start without terminate");
 
 		index = 0;
-		memset(cmdData,0,CMD_SIZE);
+		memset(cmdData,0,CMD_SIZE+1);
 		TM_setSecTimer(0, MESS_TIMEOUT);
 		state = MP_GetCMD;
 		break;
@@ -138,6 +138,7 @@ void MP_command_parser() {
 	// Successful state
 	case MP_Done:
 		cmdFlag = 1;
+		cmdData[CMD_SIZE] = '\0';
 		TM_resetSecFlag(0);
 		state = MP_WaitCMD;
 		break;
@@ -159,8 +160,12 @@ void MP_communication() {
 
 	switch(state) {
 	case MP_IDLE:
-		if(MP_CMD_translate() == MP_RST_CMD) {
+		cmd = MP_CMD_translate();
+		if(cmd == MP_RST_CMD) {
 			state = MP_ADC;
+		}
+		else if(cmd == MP_ERROR_CMD) {
+			MP_send("Error: unrecognized command");
 		}
 		break;
 	case MP_ADC:
@@ -193,6 +198,9 @@ void MP_communication() {
 			TM_resetSecFlag(1);
 			state = MP_ADC;
 		}
+		else if(cmd == MP_ERROR_CMD) {
+			MP_send("Error: unrecognized command");
+		}
 		break;
 	default:
 		break;
@@ -204,8 +212,7 @@ CMD MP_CMD_translate() {
 	if(!cmdFlag) return MP_NO_CMD;
 	cmdFlag = 0;
 
-	HAL_UART_Transmit(MP_uart, cmdData, CMD_SIZE, HAL_MAX_DELAY);
-	HAL_UART_Transmit(MP_uart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
+	MP_send((char*)cmdData);
 
 	if(strcmp(MP_cmd[MP_RST_CMD], (char*)cmdData) == 0) {
 		return MP_RST_CMD;
